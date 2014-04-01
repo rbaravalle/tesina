@@ -1,0 +1,10 @@
+void main(
+		float2 position : POSITION,
+        float2 texCoord0 : TEXCOORD0,
+	
+		out float4 oPosition     : POSITION,
+        out float2 oCoord0  : TEXCOORD0)
+{
+    oPosition = float4(position, 0, 1);
+    oCoord0 = texCoord0;
+}

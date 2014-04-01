@@ -1,0 +1,210 @@
+#define CANT 4
+#define BASES 3
+
+float2 rotar(float2 texCoord, float angle)
+{
+      float2 aux = texCoord;
+
+      if(angle != 0)
+      {
+          aux -= float2(0.5,0.5);
+
+          float cos, sin;
+          float2 temp;
+          sincos(angle, sin, cos);
+
+          temp.x = cos * (aux.x) +
+                           -sin * (aux.y);
+          temp.y = sin * (aux.x) +
+                            cos * (aux.y);
+
+          aux = temp;
+          aux += float2(0.5,0.5);
+      }
+
+      return aux;
+}
+
+float2 desplazar(float2 texCoord, float dx, float dy)
+{
+    return texCoord - float2(dx,dy);
+}
+
+
+
+float sobre (float f, float g) {
+    return (f > 0.2 ? f : g);
+}
+
+
+float combina (float t1, float t2, int i)
+{
+  if (i == 0 )
+      return t1+t2;
+  else { if (i==1) return t1-t2;
+  else {if(i==2) return lerp(t1,t2,0.5); else { 
+            if(i==3) return sobre(t1,t2); else return t1*t2;} }}
+  
+}
+
+
+// devuelve el valor en la funcion base solicitada
+float fbase(int b, float xf, float yf, float alpha, float beta, float gama) {
+
+    if(b == 1)
+        return (sin(xf)+sin(yf)+2)/4;
+    else { 
+        if(b==2) return (sin(alpha*xf + beta*sin(xf) + gama*sin(yf))+1)/2;
+        else  {
+            return (sin(sqrt(xf*xf + yf*yf))+1)/2;
+        }
+    }
+
+}
+
+float filterwidth(sampler2D filtermap, float2 uv)
+{
+  float log2width = (255./16.) * tex2D(filtermap, uv).x;
+  if (log2width < .01) {
+    log2width = (255./16.) * tex2D(filtermap, uv/256).x;
+    return 256 * exp2(-log2width);
+  } else
+      
+   return exp2(-log2width);
+}
+
+float4 main(
+        float2 coord0  : TEXCOORD0,
+
+        uniform float usa[CANT],
+        uniform float amplitud[CANT],
+        uniform float turb[CANT],
+        uniform float escala_u[CANT],
+        uniform float intensidad[CANT],
+        uniform float base[CANT],
+        uniform float angulos[CANT],        uniform float desplazamiento_u[CANT],
+        uniform float desplazamiento_v[CANT],
+        uniform float tipo_turb[CANT],
+        uniform float escala_v[CANT],
+        uniform float alpha[CANT],
+        uniform float beta[CANT],
+        uniform float gama[CANT],
+        uniform float color[3],
+
+        uniform int combina1,
+        uniform int combina2,
+        uniform int antialias,
+
+        uniform sampler2D textura0,
+        uniform sampler2D textura1,
+        uniform sampler2D textura2,
+        uniform sampler2D filtermap
+	
+	): COLOR 
+{
+
+    float4 col;
+
+    float noise = tex2D(textura0, coord0);
+    float noise2 = tex2D(textura1, coord0);
+    float noise3 = tex2D(textura2, coord0);
+
+
+    float tturb1, tturb2, tturb3;
+
+    // se selecciona el tipo de turbulencia para la textura
+    if(tipo_turb[0] == 0)
+            tturb1 = noise;
+    else { if(tipo_turb[0] == 1) tturb1 = noise2; else tturb1 = noise3; }
+
+    if(tipo_turb[1] == 0)
+            tturb2 = noise;
+    else { if(tipo_turb[1] == 1) tturb2 = noise2; else tturb2 = noise3; }
+
+    if(tipo_turb[2] == 0)
+            tturb3 = noise;
+    else { if(tipo_turb[2] == 1) tturb3 = noise2; else tturb3 = noise3; }
+
+    float turbulencia0 = turb[0] * tturb1;
+    float turbulencia1 = turb[1] * tturb2;
+    float turbulencia2 = turb[2] * tturb3;
+
+    // antialiasing
+    if(antialias) {
+        float fil = filterwidth(filtermap,coord0);
+        float start_alias = 0.5;
+        if(fil < start_alias) {
+            float noise_level = (start_alias - fil);
+            turbulencia0 = max(turb[0],noise_level) * tturb1;
+            turbulencia1 = max(turb[1],noise_level) * tturb2;
+            turbulencia2 = max(turb[2],noise_level) * tturb3;
+        }
+    }    
+    
+
+    float b1,b2,b3;
+
+    // arrays de samplers ?
+    if(base[0] < BASES) {
+        float2 c0 = rotar(coord0, angulos[0]);
+        c0 = desplazar(c0, desplazamiento_u[0],desplazamiento_v[0]);
+        c0 = c0 + float2(turbulencia0,turbulencia0);
+        float xf = escala_u[0]*c0.x;
+        float yf = escala_v[0]*c0.y;
+        b1 = fbase(base[0],xf, yf, alpha[0], beta[0], gama[0]);
+    }
+    else {
+        if(base[0] == BASES)
+            b1 = noise;
+        else { if(base[0] == BASES) b1 = noise2; else b1 = noise3; }
+    }
+
+    if(base[1] < BASES ) {
+        float2 c1 = rotar(coord0, angulos[1]);
+        c1 = desplazar(c1, desplazamiento_u[1],desplazamiento_v[1]);
+        c1 = c1 + float2(turbulencia1,turbulencia1);
+        float xf2 = escala_u[1]*c1.x;
+        float yf2 = escala_v[1]*c1.y;
+        b2 = fbase(base[1],xf2, yf2, alpha[1], beta[1], gama[1]);
+    }
+    else {
+        if(base[1] == BASES)
+            b2 = noise;
+        else { if(base[1] == BASES+1) b2 = noise2; else b2 = noise3; }
+    }
+
+    if(base[2] < BASES) {
+        float2 c2 = rotar(coord0, angulos[2]);
+        c2 = desplazar(c2, desplazamiento_u[2],desplazamiento_v[2]);
+        c2 = c2 + float2(turbulencia2,turbulencia2);        
+        float xf3 = escala_u[2]*c2.x;
+        float yf3 = escala_v[2]*c2.y;
+        b3 = fbase(base[2],xf3, yf3, alpha[2], beta[2], gama[2]);
+    }
+    else {
+        if(base[2] == BASES)
+            b3 = noise;
+        else { if(base[2] == BASES+1) b3 = noise2; else b3 = noise3; }
+    }
+
+    float t1 = intensidad[0]*pow(b1,amplitud[0]);
+    float t2 = intensidad[1]*pow(b2,amplitud[1]);
+    float t3 = intensidad[2]*pow(b3,amplitud[2]);
+
+    b1 = usa[0] == 1 ? t1 : 0;
+
+    b2 = (usa[1] == 1 ? (usa[0] == 1 ?
+                        combina(b1,t2,combina1): t2) : b1);
+
+    b3 = (usa[2] == 1 ? (usa[1] == 1 || usa[0] == 1 ?
+                        combina(b2,t3,combina2) : t3) : b2);
+
+    float sb3 = saturate(b3);
+
+    col.xyz = sb3+float3(color[0],color[1],color[2]);
+    col.a = 1;
+
+    return col;
+}
+
+
